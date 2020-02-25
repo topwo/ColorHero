@@ -38,6 +38,10 @@ cc.Class({
         label:{
             type: cc.Label,
             default: null
+        },
+        take_pic_sprite:{
+            type: cc.Sprite,
+            default: null
         }
     },
 
@@ -49,6 +53,7 @@ cc.Class({
     start () {
         cc.log("start");
         this.bg.node.on(cc.Node.EventType.TOUCH_END, this.colorPoint, this);
+        this.label.node.on(cc.Node.EventType.TOUCH_END, this.takePicture, this);
     },
 
     // update (dt) {},
@@ -139,5 +144,51 @@ cc.Class({
         // let dataURL = canvas.toDataURL("image/jpeg");
         // let img = document.createElement("img");
         // img.src = dataURL;
+    },
+
+    takePicture(event){
+        cc.log("平台：" + cc.sys.platform);
+        cc.log("cc.sys.WECHAT_GAME" + cc.sys.WECHAT_GAME);
+        let self = this;
+        if(cc.sys.platform == cc.sys.WECHAT_GAME){
+            self.takePictureByWX();
+        }
+    },
+
+    // 设置充值二维码
+    takePictureByWX(){
+        let self = this;
+        let camera = wx.createCamera({
+            x:0,
+            y:0,
+            width:100,
+            height:100
+        });
+        setTimeout(function () {
+            camera.takePhoto("normal").then(res => {
+                cc.loader.load(res.tempImagePath, function(err, texture){   
+                    self.take_pic_sprite.spriteFrame = new cc.SpriteFrame(texture);
+                    camera.destroy();
+                });
+            });
+        }, 1000);
+        // wx.chooseImage({
+        //     count: 1,
+        //     sizeType: [ 'compressed'],
+        //     sourceType: ['album', 'camera'],
+        //     success(res) {
+        //         cc.loader.load(res.tempFilePaths[0], function(err, texture){   
+        //             self.take_pic_sprite.spriteFrame = new cc.SpriteFrame(texture);
+        //         });
+        //         // wx.getFileSystemManager().readFile({
+        //         //     filePath: res.tempFilePaths[0], //选择图片返回的相对路径
+        //         //     encoding: 'base64', //编码格式
+        //         //     success: res => { //成功的回调
+        //         //         cc.log('data:image/png;base64,' , res.data);
+        //         //         self.createPicture(res.data);
+        //         //     }
+        //         // });
+        //     }
+        // });
     },
 });
