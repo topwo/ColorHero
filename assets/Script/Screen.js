@@ -31,29 +31,47 @@ cc.Class({
             type: cc.Camera,
             default: null
         },
-        bg:{
+        camera_bg:{
             type: cc.Sprite,
             default: null
         },
-        label:{
+        btn_label:{
             type: cc.Label,
             default: null
         },
-        take_pic_sprite:{
+        label_state:{
+            type: cc.Label,
+            default: null
+        },
+        show_take_pic_sprite:{
             type: cc.Sprite,
             default: null
-        }
+        },
+        enemy:{
+            type: cc.Sprite,
+            default: null
+        },
+        pw:0,
+        ph:0,
+        os_camera:null,
+        os_camera_x:0,
+        os_camera_y:0
     },
 
     // LIFE-CYCLE CALLBACKS:
 
-    // onLoad () {
-    // },
+    onLoad () {
+        var self = this;
+        var sys_info = wx.getSystemInfoSync();
+        self.pw = sys_info.windowWidth / cc.visibleRect.width;
+        self.ph = sys_info.windowHeight / cc.visibleRect.height;
+        self.btn_label.string = "打开摄像头";
+    },
 
     start () {
         cc.log("start");
-        this.bg.node.on(cc.Node.EventType.TOUCH_END, this.colorPoint, this);
-        this.label.node.on(cc.Node.EventType.TOUCH_END, this.takePicture, this);
+        // this.bg.node.on(cc.Node.EventType.TOUCH_END, this.colorPoint, this);
+        this.btn_label.node.on(cc.Node.EventType.TOUCH_END, this.takePicture, this);
     },
 
     // update (dt) {},
@@ -106,13 +124,13 @@ cc.Class({
         render_texture.initWithSize(cc.visibleRect.width, cc.visibleRect.height);
         camera.targetTexture = render_texture;
 
-        // // 渲染一次摄像机，即更新一次内容到 RenderTexture 中
+        // 渲染一次摄像机，即更新一次内容到 RenderTexture 中
         camera.render();
 
         // 这样我们就能从 RenderTexture 中获取到数据了
         let data = render_texture.readPixels(null, location.x, location.y, 1, 1);
         cc.log("--", "data", data);
-        this.label.node.color = cc.color(data[0],data[1],data[2]);
+        this.btn_label.node.color = cc.color(data[0],data[1],data[2]);
 
         // let spriteFrame = new cc.SpriteFrame();
         // spriteFrame.setTexture(render_texture);
@@ -146,39 +164,104 @@ cc.Class({
         // img.src = dataURL;
     },
 
+    //随机照片中的一个点
+    getColorByRandomPoint(){
+        var self = this;
+        let camera = self.camera.node.parent.addComponent(cc.Camera);
+
+        // 新建一个 RenderTexture，并且设置 camera 的 targetTexture 为新建的 RenderTexture，这样 camera 的内容将会渲染到新建的 RenderTexture 中。
+        let render_texture = new cc.RenderTexture();
+        // 如果截图内容中不包含 Mask 组件，可以不用传递第三个参数
+        render_texture.initWithSize(cc.visibleRect.width, cc.visibleRect.height);
+        camera.targetTexture = render_texture;
+
+        // 渲染一次摄像机，即更新一次内容到 RenderTexture 中
+        camera.render();
+
+        // 这样我们就能从 RenderTexture 中获取到数据了
+        var location = self.show_take_pic_sprite.node.parent.convertToWorldSpaceAR(cc.v2(self.show_take_pic_sprite.node.x, self.show_take_pic_sprite.node.y));
+        let show_width = self.show_take_pic_sprite.node.width * self.show_take_pic_sprite.node.scaleX;
+        let show_height = self.show_take_pic_sprite.node.height * self.show_take_pic_sprite.node.scaleY;
+        let r_x = location.x - show_width * 0.5 + Math.floor(Math.random() * show_width);
+        let r_y = location.y - show_height * 0.5 +  Math.floor(Math.random() * show_height);
+        self.label_state.string += "\nr_x" +Math.floor(r_x)+",r_y"+Math.floor(r_y);
+        let data = render_texture.readPixels(null, r_x, r_y, 1, 1);
+        return cc.color(data[0],data[1],data[2]);
+    },
+
+    setColor(cc_color){
+        var self = this;
+        self.enemy.node.color = cc_color;
+    },
+
+    takePictureCallFunc(){
+        var self = this;
+        self.setColor(self.getColorByRandomPoint());
+    },
+
+    //拍照接口
     takePicture(event){
+        let self = this;
         cc.log("平台：" + cc.sys.platform);
         cc.log("cc.sys.WECHAT_GAME" + cc.sys.WECHAT_GAME);
-        let self = this;
-        if(cc.sys.platform == cc.sys.WECHAT_GAME){
-            self.takePictureByWX();
+        if(self.btn_label.string == "打开摄像头"){
+            self.btn_label.string = "拍照";
+            if(cc.sys.platform == cc.sys.WECHAT_GAME){
+                self.openCameraWX();
+            }
+        }
+        else if(self.btn_label.string == "拍照"){
+            if(cc.sys.platform == cc.sys.WECHAT_GAME){
+                self.takePictureByWX();
+            }
         }
     },
 
-    // 设置充值二维码
-    takePictureByWX(){
+    //微信打开摄像头
+    openCameraWX(){
         let self = this;
-        let camera = wx.createCamera({
-            x:0,
-            y:0,
-            width:100,
-            height:100
-        });
-        setTimeout(function () {
-            camera.takePhoto("normal").then(res => {
-                cc.loader.load(res.tempImagePath, function(err, texture){   
-                    self.take_pic_sprite.spriteFrame = new cc.SpriteFrame(texture);
-                    camera.destroy();
-                });
+        var location = self.camera_bg.node.parent.convertToWorldSpaceAR(cc.v2(self.camera_bg.node.x, self.camera_bg.node.y));
+        cc.log(location.x, location.y);
+        // self.label_state.string = "x"+Math.floor(location.x)+",y"+Math.floor(cc.visibleRect.height - location.y - 100);
+        // self.label_state.string += "\nx" +sys_info.screenWidth+",y"+sys_info.screenHeight;
+        // self.label_state.string += "\nx" +sys_info.windowWidth+",y"+sys_info.windowHeight;
+        // self.label_state.string += "\nx" +Math.floor(cc.visibleRect.width)+",y"+Math.floor(cc.visibleRect.height);
+        // self.label_state.string += "\nx" +Math.floor(os_camera_position.x)+",y"+Math.floor(os_camera_position.y);
+        // self.label_state.string += "\npixelRatio" +sys_info.pixelRatio;
+        if(self.os_camera == null){
+            var os_camera = null;
+            self.label_state.string += "\nx" +((location.x - self.camera_bg.node.width * 0.5) * self.pw);
+            os_camera = wx.createCamera({
+                x:(location.x - self.camera_bg.node.width * 0.5) * self.pw,
+                y:(cc.visibleRect.height - location.y - self.camera_bg.node.height * 0.5) * self.ph,
+                width:self.camera_bg.node.width * self.pw,
+                height:self.camera_bg.node.height * self.ph,
+                success:function(res){
+                    self.os_camera = os_camera;
+                    self.os_camera_x = self.os_camera.x;
+                    self.os_camera_y = self.os_camera.y;
+                },
+                fail:function(res){
+                    self.label_state.string = "fail";
+                }
             });
-        }, 1000);
+            // setTimeout(function () {
+            //     self.os_camera = os_camera;
+            // }, 1000);
+        }
+        else{
+            self.os_camera.x = self.os_camera_x;
+            self.os_camera.y = self.os_camera_y;
+        }
         // wx.chooseImage({
         //     count: 1,
         //     sizeType: [ 'compressed'],
         //     sourceType: ['album', 'camera'],
         //     success(res) {
         //         cc.loader.load(res.tempFilePaths[0], function(err, texture){   
-        //             self.take_pic_sprite.spriteFrame = new cc.SpriteFrame(texture);
+        //             self.show_take_pic_sprite.spriteFrame = new cc.SpriteFrame(texture);
+        //             self.show_take_pic_sprite.width = 100;
+        //             self.show_take_pic_sprite.height = 100;
         //         });
         //         // wx.getFileSystemManager().readFile({
         //         //     filePath: res.tempFilePaths[0], //选择图片返回的相对路径
@@ -190,5 +273,31 @@ cc.Class({
         //         // });
         //     }
         // });
+    },
+    takePictureByWX(){
+        let self = this;
+        if(self.os_camera != null){
+            self.btn_label.string = "拍照中。。。";
+            self.os_camera.takePhoto("normal")
+            .then(res => {
+                if(res.tempImagePath == null){
+                    self.btn_label.string = "拍照";
+                    self.label_state.string = "拍照失败";
+                    return;
+                }
+                // self.label_state.string = res.tempImagePath;
+                cc.loader.load(res.tempImagePath, function(err, texture){   
+                    self.show_take_pic_sprite.spriteFrame = new cc.SpriteFrame(texture);
+                    self.show_take_pic_sprite.node.scaleX = 100 / texture.width;
+                    self.show_take_pic_sprite.node.scaleY = 100 / texture.height;
+                    self.btn_label.string = "打开摄像头";
+                    self.os_camera.x = -self.os_camera.width;
+                    self.os_camera.y = -self.os_camera.height;
+                    // self.os_camera.destroy();
+                    // self.os_camera = null;
+                    self.takePictureCallFunc();
+                });
+            });
+        }
     },
 });
